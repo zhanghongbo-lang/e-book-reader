@@ -1,6 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import JSZip from 'jszip'
-import { decodeEntities, findOpfPath, htmlToText, parseEpub, parseOpf, resolveRelative } from './epub'
+import {
+  decodeEntities,
+  findOpfPath,
+  htmlToText,
+  parseEpub,
+  parseNcx,
+  parseNavToc,
+  parseOpf,
+  resolveRelative
+} from './epub'
 
 describe('decodeEntities', () => {
   it('解码命名实体', () => {
@@ -58,17 +67,18 @@ describe('findOpfPath', () => {
 })
 
 describe('parseOpf', () => {
-  it('解析标题、manifest 与 spine 阅读顺序', () => {
+  it('解析标题、manifest、spine 阅读顺序与 ncx/nav 路径', () => {
     const opf = `<?xml version="1.0"?>
 <package xmlns="http://www.idpf.org/2007/opf">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:title>测试书名</dc:title>
   </metadata>
   <manifest>
+    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
     <item id="c2" href="chapter2.xhtml" media-type="application/xhtml+xml"/>
     <item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
   </manifest>
-  <spine>
+  <spine toc="ncx">
     <itemref idref="c1"/>
     <itemref idref="c2"/>
   </spine>
@@ -78,6 +88,18 @@ describe('parseOpf', () => {
     expect(info.spine).toEqual(['c1', 'c2'])
     expect(info.manifest.get('c1')).toBe('chapter1.xhtml')
     expect(info.manifest.get('c2')).toBe('chapter2.xhtml')
+    expect(info.ncxHref).toBe('toc.ncx')
+    expect(info.navHref).toBeNull()
+  })
+
+  it('识别 EPUB3 的 nav 文档', () => {
+    const opf = `<package>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+  </manifest>
+  <spine/>
+</package>`
+    expect(parseOpf(opf).navHref).toBe('nav.xhtml')
   })
 
   it('缺标题时返回 null', () => {
@@ -104,48 +126,138 @@ describe('resolveRelative', () => {
   })
 })
 
+describe('parseNcx', () => {
+  it('展平嵌套 navPoint 并保持文档顺序', () => {
+    const ncx = `<ncx>
+  <navMap>
+    <navPoint id="n1" playOrder="1">
+      <navLabel><text>第一卷</text></navLabel>
+      <content src="chapter1.xhtml"/>
+    </navPoint>
+    <navPoint id="n2" playOrder="2">
+      <navLabel><text>第二卷</text></navLabel>
+      <content src="chapter2.xhtml"/>
+      <navPoint id="n3" playOrder="3">
+        <navLabel><text>抗日战争时期（上）</text></navLabel>
+        <content src="chapter2.xhtml#part"/>
+      </navPoint>
+    </navPoint>
+  </navMap>
+</ncx>`
+    expect(parseNcx(ncx)).toEqual([
+      { label: '第一卷', href: 'chapter1.xhtml' },
+      { label: '第二卷', href: 'chapter2.xhtml' },
+      { label: '抗日战争时期（上）', href: 'chapter2.xhtml#part' }
+    ])
+  })
+
+  it('空 navMap 返回空数组', () => {
+    expect(parseNcx('<ncx><navMap/></ncx>')).toEqual([])
+  })
+})
+
+describe('parseNavToc', () => {
+  it('提取 toc nav 里的链接（含嵌套）', () => {
+    const nav = `<html><body>
+<nav epub:type="toc">
+  <ol>
+    <li><a href="chapter1.xhtml">第一卷</a></li>
+    <li><a href="chapter2.xhtml">第二卷</a>
+      <ol>
+        <li><a href="chapter2.xhtml#p1">抗日战争时期（上）</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+<nav epub:type="landmarks"><ol><li><a href="cover.xhtml">封面</a></li></ol></nav>
+</body></html>`
+    expect(parseNavToc(nav)).toEqual([
+      { label: '第一卷', href: 'chapter1.xhtml' },
+      { label: '第二卷', href: 'chapter2.xhtml' },
+      { label: '抗日战争时期（上）', href: 'chapter2.xhtml#p1' }
+    ])
+  })
+})
+
 describe('parseEpub', () => {
-  async function buildEpub(): Promise<Buffer> {
-    const zip = new JSZip()
-    zip.file('META-INF/container.xml', `<?xml version="1.0"?>
+  const containerXml = `<?xml version="1.0"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
   <rootfiles>
     <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
   </rootfiles>
-</container>`)
-    zip.file('OEBPS/content.opf', `<?xml version="1.0" encoding="utf-8"?>
+</container>`
+
+  const chapter1 = `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>第一章</title></head>
+<body><h1>第一章 开始</h1><p>你好，世界。</p></body>
+</html>`
+
+  const chapter2 = `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>第二章</title></head>
+<body><h1>第二章 内容。</h1><p>第二段。</p></body>
+</html>`
+
+  function buildOpf(tocAttr: string): string {
+    return `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="2.0">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:title>测试书名</dc:title>
   </metadata>
   <manifest>
+    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
     <item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
     <item id="c2" href="chapter2.xhtml" media-type="application/xhtml+xml"/>
   </manifest>
-  <spine>
+  <spine${tocAttr ? ` toc="${tocAttr}"` : ''}>
     <itemref idref="c1"/>
     <itemref idref="c2"/>
   </spine>
-</package>`)
-    zip.file('OEBPS/chapter1.xhtml', `<?xml version="1.0"?>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head><title>第一章</title><style>p{color:red}</style></head>
-<body><h1>第一章 开始</h1><p>你好，世界。</p><p>这是第一段。</p></body>
-</html>`)
-    zip.file('OEBPS/chapter2.xhtml', `<?xml version="1.0"?>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head><title>第二章</title></head>
-<body><p>第二章 内容。</p><p>第二段。<br/>换行。</p></body>
-</html>`)
+</package>`
+  }
+
+  const ncx = `<?xml version="1.0"?>
+<ncx version="2005-1">
+  <navMap>
+    <navPoint id="n1" playOrder="1">
+      <navLabel><text>第一卷</text></navLabel>
+      <content src="chapter1.xhtml"/>
+    </navPoint>
+    <navPoint id="n2" playOrder="2">
+      <navLabel><text>第二卷</text></navLabel>
+      <content src="chapter2.xhtml"/>
+      <navPoint id="n3" playOrder="3">
+        <navLabel><text>抗日战争时期（上）</text></navLabel>
+        <content src="chapter2.xhtml#part"/>
+      </navPoint>
+    </navPoint>
+  </navMap>
+</ncx>`
+
+  async function buildEpub(withNcx: boolean): Promise<Buffer> {
+    const zip = new JSZip()
+    zip.file('META-INF/container.xml', containerXml)
+    zip.file('OEBPS/content.opf', buildOpf(withNcx ? 'ncx' : ''))
+    if (withNcx) zip.file('OEBPS/toc.ncx', ncx)
+    zip.file('OEBPS/chapter1.xhtml', chapter1)
+    zip.file('OEBPS/chapter2.xhtml', chapter2)
     return zip.generateAsync({ type: 'nodebuffer' })
   }
 
-  it('按 spine 顺序拼接文本并识别章节', async () => {
-    const parsed = await parseEpub(await buildEpub())
+  it('按 spine 顺序拼接文本，并使用内置 NCX 目录', async () => {
+    const parsed = await parseEpub(await buildEpub(true))
     expect(parsed.title).toBe('测试书名')
-    expect(parsed.content).toBe(
-      '第一章 开始\n你好，世界。\n这是第一段。\n第二章 内容。\n第二段。\n换行。'
-    )
+    expect(parsed.content).toBe('第一章 开始\n你好，世界。\n第二章 内容。\n第二段。')
+    expect(parsed.chapters).toEqual([
+      { title: '第一卷', start: 0 },
+      { title: '第二卷', start: 14 },
+      { title: '抗日战争时期（上）', start: 14 }
+    ])
+  })
+
+  it('无内置目录时回退到正则识别章节', async () => {
+    const parsed = await parseEpub(await buildEpub(false))
     expect(parsed.chapters.map((c) => c.title)).toEqual(['第一章 开始', '第二章 内容。'])
   })
 

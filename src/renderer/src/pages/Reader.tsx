@@ -6,8 +6,10 @@ import { findMatches, type Match } from '../../../shared/lib/search'
 import { splitRichLine } from '../../../shared/lib/annotations'
 import {
   clamp,
+  FONT_LABELS,
   FONT_SIZE_MAX,
   FONT_SIZE_MIN,
+  FONT_STACKS,
   LINE_HEIGHT_MAX,
   LINE_HEIGHT_MIN,
   THEME_LABELS,
@@ -20,6 +22,7 @@ interface Props {
   settings: ReaderSettings
   onUpdateSettings: (patch: Partial<ReaderSettings>) => void
   onCycleTheme: () => void
+  onCycleFont: () => void
 }
 
 interface Para {
@@ -95,7 +98,7 @@ function renderParaText(
   })
 }
 
-export default function Reader({ bookId, onBack, settings, onUpdateSettings, onCycleTheme }: Props) {
+export default function Reader({ bookId, onBack, settings, onUpdateSettings, onCycleTheme, onCycleFont }: Props) {
   const [data, setData] = useState<ReadResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showToc, setShowToc] = useState(false)
@@ -394,6 +397,7 @@ export default function Reader({ bookId, onBack, settings, onUpdateSettings, onC
         </button>
         <span className="reader-title">{data?.fileName ?? ''}</span>
         <button onClick={onCycleTheme}>主题：{THEME_LABELS[settings.theme]}</button>
+        <button onClick={onCycleFont}>字体：{FONT_LABELS[settings.fontFamily]}</button>
         <div className="reader-controls">
           <button onClick={() => changeFontSize(-1)}>字号-</button>
           <button onClick={() => changeFontSize(1)}>字号+</button>
@@ -514,7 +518,8 @@ export default function Reader({ bookId, onBack, settings, onUpdateSettings, onC
                 width: '100%',
                 transform: `translateY(${vi.start}px)`,
                 fontSize: `${settings.fontSize}px`,
-                lineHeight: settings.lineHeight
+                lineHeight: settings.lineHeight,
+                fontFamily: FONT_STACKS[settings.fontFamily]
               }}
             >
               {renderParaText(

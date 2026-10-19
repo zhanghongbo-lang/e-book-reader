@@ -3,6 +3,7 @@ import {
   clamp,
   DEFAULT_SETTINGS,
   loadSettings,
+  nextFont,
   nextTheme,
   saveSettings,
   STORAGE_KEY,
@@ -26,9 +27,9 @@ describe('loadSettings', () => {
 
   it('读回已保存的值', () => {
     const storage = createStorage({
-      [STORAGE_KEY]: JSON.stringify({ theme: 'dark', fontSize: 22, lineHeight: 2 })
+      [STORAGE_KEY]: JSON.stringify({ theme: 'dark', fontSize: 22, lineHeight: 2, fontFamily: 'serif' })
     })
-    expect(loadSettings(storage)).toEqual({ theme: 'dark', fontSize: 22, lineHeight: 2 })
+    expect(loadSettings(storage)).toEqual({ theme: 'dark', fontSize: 22, lineHeight: 2, fontFamily: 'serif' })
   })
 
   it('越界字号/行距被 clamp 到合法范围', () => {
@@ -45,6 +46,11 @@ describe('loadSettings', () => {
     expect(loadSettings(storage).theme).toBe('light')
   })
 
+  it('非法 fontFamily 回退默认', () => {
+    const storage = createStorage({ [STORAGE_KEY]: JSON.stringify({ fontFamily: 'oops' }) })
+    expect(loadSettings(storage).fontFamily).toBe('system')
+  })
+
   it('损坏的 JSON 回退默认', () => {
     const storage = createStorage({ [STORAGE_KEY]: 'not-json' })
     expect(loadSettings(storage)).toEqual(DEFAULT_SETTINGS)
@@ -54,8 +60,13 @@ describe('loadSettings', () => {
 describe('saveSettings 与 loadSettings 往返', () => {
   it('保存后能读回一致数据', () => {
     const storage = createStorage()
-    saveSettings({ theme: 'sepia', fontSize: 20, lineHeight: 1.6 }, storage)
-    expect(loadSettings(storage)).toEqual({ theme: 'sepia', fontSize: 20, lineHeight: 1.6 })
+    saveSettings({ theme: 'sepia', fontSize: 20, lineHeight: 1.6, fontFamily: 'mono' }, storage)
+    expect(loadSettings(storage)).toEqual({
+      theme: 'sepia',
+      fontSize: 20,
+      lineHeight: 1.6,
+      fontFamily: 'mono'
+    })
   })
 })
 
@@ -72,5 +83,14 @@ describe('nextTheme', () => {
     expect(nextTheme('light')).toBe('sepia')
     expect(nextTheme('sepia')).toBe('dark')
     expect(nextTheme('dark')).toBe('light')
+  })
+})
+
+describe('nextFont', () => {
+  it('按系统默认 → 衬线 → 无衬线 → 等宽循环', () => {
+    expect(nextFont('system')).toBe('serif')
+    expect(nextFont('serif')).toBe('sans')
+    expect(nextFont('sans')).toBe('mono')
+    expect(nextFont('mono')).toBe('system')
   })
 })

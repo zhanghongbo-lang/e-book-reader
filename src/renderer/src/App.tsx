@@ -4,6 +4,7 @@ import Reader from './pages/Reader'
 import {
   applyTheme,
   loadSettings,
+  nextFont,
   nextTheme,
   saveSettings,
   type ReaderSettings
@@ -33,6 +34,14 @@ export default function App() {
     })
   }, [])
 
+  const cycleFont = useCallback(() => {
+    setSettings((prev) => {
+      const next = { ...prev, fontFamily: nextFont(prev.fontFamily) }
+      saveSettings(next)
+      return next
+    })
+  }, [])
+
   if (bookId === null) {
     return (
       <Shelf
@@ -49,6 +58,7 @@ export default function App() {
       settings={settings}
       onUpdateSettings={updateSettings}
       onCycleTheme={cycleTheme}
+      onCycleFont={cycleFont}
     />
   )
 }

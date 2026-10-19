@@ -77,7 +77,9 @@ function renderParaText(
   currentMatchStart: number | null,
   annotations: Annotation[]
 ): ReactNode {
-  if (text.length === 0) return '\u00A0'
+  // 空行不渲染占位文本，改由 CSS 的 .para:empty::after 提供，
+  // 保证 DOM 文本与内容严格一致，选区偏移映射不产生偏差
+  if (text.length === 0) return null
   if (matches.length === 0 && annotations.length === 0) return text
   const segments = splitRichLine(text, start, matches, currentMatchStart, annotations)
   return segments.map((seg, i) => {

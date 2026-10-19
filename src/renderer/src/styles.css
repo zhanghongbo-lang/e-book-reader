@@ -205,6 +205,11 @@ button:disabled {
   word-break: break-word;
 }
 
+/* 空行占位：用伪元素而非真实文本节点，避免选区偏移映射出现 ±1 偏差 */
+.para:empty::after {
+  content: '\00A0';
+}
+
 /* 目录面板 */
 .toc-panel {
   position: absolute;

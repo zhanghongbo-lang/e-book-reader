@@ -51,21 +51,36 @@ function stripTags(s: string): string {
   return s.replace(/<[^>]+>/g, '')
 }
 
-/** 把 EPUB 的 XHTML 片段提取为纯文本段落（每段一行） */
-export function htmlToText(html: string): string {
-  const cleaned = html
+/** 去掉注释 / head / style / script */
+function cleanHtml(html: string): string {
+  return html
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<head\b[\s\S]*?<\/head>/gi, '')
     .replace(/<style\b[\s\S]*?<\/style>/gi, '')
     .replace(/<script\b[\s\S]*?<\/script>/gi, '')
+}
+
+/** 把已清理的 XHTML 转为带换行的纯文本（不 trim、不折叠空行） */
+function blockifyAndStrip(cleaned: string): string {
   const withNewlines = cleaned
     .replace(/<(br|hr)\b[^>]*\/?>/gi, '\n')
     .replace(/<\/(p|div|h[1-6]|li|blockquote|section|article|tr|table|figcaption)\b[^>]*>/gi, '\n')
-  const noTags = withNewlines.replace(/<[^>]+>/g, '')
-  return decodeEntities(noTags)
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{2,}/g, '\n')
-    .trim()
+  return decodeEntities(withNewlines.replace(/<[^>]+>/g, ''))
+}
+
+/** 折叠行尾空白与连续空行（与 htmlToText 一致，但不 trim） */
+function collapse(s: string): string {
+  return s.replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n')
+}
+
+/** 已清理 XHTML -> 纯文本（不 trim） */
+function textFromCleaned(cleaned: string): string {
+  return collapse(blockifyAndStrip(cleaned))
+}
+
+/** 把 EPUB 的 XHTML 片段提取为纯文本段落（每段一行） */
+export function htmlToText(html: string): string {
+  return textFromCleaned(cleanHtml(html)).trim()
 }
 
 function attr(tag: string, name: string): string | null {
@@ -212,8 +227,42 @@ export function resolveRelative(baseDir: string, href: string): string {
   return out.join('/')
 }
 
+/** 拆出 href 的路径与锚点片段（片段做 URL 解码） */
+export function splitFragment(href: string): { path: string; fragment: string } {
+  const decoded = decodeUri(href)
+  const idx = decoded.indexOf('#')
+  if (idx < 0) return { path: decoded, fragment: '' }
+  return { path: decoded.slice(0, idx), fragment: decoded.slice(idx + 1) }
+}
+
+/** 在 XHTML 中定位 id/name 锚点，返回其相对纯文本的字符偏移（找不到返回 null） */
+export function resolveAnchorOffset(html: string, fragmentId: string): number | null {
+  const cleaned = cleanHtml(html)
+  const fullNoTrim = textFromCleaned(cleaned)
+  const leadingTrim = fullNoTrim.length - fullNoTrim.trimStart().length
+
+  const tagRe = /<[^>]*>/g
+  let m: RegExpExecArray | null
+  while ((m = tagRe.exec(cleaned)) !== null) {
+    const tag = m[0]
+    const id = attr(tag, 'id') ?? attr(tag, 'name')
+    if (id !== fragmentId) continue
+    const offset = textFromCleaned(cleaned.slice(0, m.index)).length - leadingTrim
+    return Math.max(0, offset)
+  }
+  return null
+}
+
+interface ResolvedTocEntry {
+  label: string
+  /** zip 内规范路径（无锚点） */
+  path: string
+  /** 锚点片段（可为空） */
+  fragment: string
+}
+
 /** 读取 EPUB 内置目录（优先 NCX，其次 nav），并把 href 解析为 zip 内规范路径 */
-async function extractToc(zip: JSZip, opf: OpfInfo, opfDir: string): Promise<TocEntry[]> {
+async function extractToc(zip: JSZip, opf: OpfInfo, opfDir: string): Promise<ResolvedTocEntry[]> {
   if (opf.ncxHref) {
     const ncxPath = resolveRelative(opfDir, opf.ncxHref)
     const ncxEntry = zip.file(ncxPath)
@@ -222,7 +271,10 @@ async function extractToc(zip: JSZip, opf: OpfInfo, opfDir: string): Promise<Toc
       const entries = parseNcx(ncxXml)
       if (entries.length > 0) {
         const base = dirnameZip(ncxPath)
-        return entries.map((e) => ({ label: e.label, href: resolveRelative(base, e.href) }))
+        return entries.map((e) => {
+          const { path, fragment } = splitFragment(e.href)
+          return { label: e.label, path: resolveRelative(base, path), fragment }
+        })
       }
     }
   }
@@ -234,19 +286,35 @@ async function extractToc(zip: JSZip, opf: OpfInfo, opfDir: string): Promise<Toc
       const entries = parseNavToc(navHtml)
       if (entries.length > 0) {
         const base = dirnameZip(navPath)
-        return entries.map((e) => ({ label: e.label, href: resolveRelative(base, e.href) }))
+        return entries.map((e) => {
+          const { path, fragment } = splitFragment(e.href)
+          return { label: e.label, path: resolveRelative(base, path), fragment }
+        })
       }
     }
   }
   return []
 }
 
-/** 把目录项映射到正文字符偏移（按文件级；同一文件内多个条目指向同一偏移） */
-function mapTocToChapters(entries: TocEntry[], offsets: Map<string, number>): Chapter[] {
+/** 把目录项映射到正文字符偏移（文件级 + 锚点级） */
+function mapTocToChapters(
+  entries: ResolvedTocEntry[],
+  fileStart: Map<string, number>,
+  fileHtml: Map<string, string>
+): Chapter[] {
   const chapters: Chapter[] = []
   for (const e of entries) {
-    const off = offsets.get(e.href)
-    if (off !== undefined) chapters.push({ title: e.label, start: off })
+    const base = fileStart.get(e.path)
+    if (base === undefined) continue
+    let start = base
+    if (e.fragment) {
+      const html = fileHtml.get(e.path)
+      if (html) {
+        const local = resolveAnchorOffset(html, e.fragment)
+        if (local !== null) start = base + local
+      }
+    }
+    chapters.push({ title: e.label, start })
   }
   return chapters
 }
@@ -267,9 +335,10 @@ export async function parseEpub(buf: Buffer): Promise<EpubParseResult> {
   const opf = parseOpf(opfXml)
   const opfDir = dirnameZip(opfPath)
 
-  // 按 spine 顺序读取内容，并记录每个文件在正文中的起始偏移
+  // 按 spine 顺序读取内容，记录每个文件在正文中的起始偏移与原始 HTML（供锚点解析）
   const parts: string[] = []
-  const offsets = new Map<string, number>()
+  const fileStart = new Map<string, number>()
+  const fileHtml = new Map<string, string>()
   let offset = 0
   for (const idref of opf.spine) {
     const href = opf.manifest.get(idref)
@@ -280,7 +349,10 @@ export async function parseEpub(buf: Buffer): Promise<EpubParseResult> {
     const html = await entry.async('string')
     const text = htmlToText(html)
     if (!text) continue
-    if (!offsets.has(resolved)) offsets.set(resolved, offset)
+    if (!fileStart.has(resolved)) {
+      fileStart.set(resolved, offset)
+      fileHtml.set(resolved, html)
+    }
     parts.push(text)
     offset += text.length + 1
   }
@@ -289,7 +361,7 @@ export async function parseEpub(buf: Buffer): Promise<EpubParseResult> {
 
   // 优先使用内置目录；没有或映射为空时回退到正则识别
   const tocEntries = await extractToc(zip, opf, opfDir)
-  let chapters = mapTocToChapters(tocEntries, offsets)
+  let chapters = mapTocToChapters(tocEntries, fileStart, fileHtml)
   if (chapters.length === 0) chapters = detectChapters(content)
 
   return { title: opf.title, content, chapters }

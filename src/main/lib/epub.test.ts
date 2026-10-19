@@ -8,7 +8,9 @@ import {
   parseNcx,
   parseNavToc,
   parseOpf,
-  resolveRelative
+  resolveAnchorOffset,
+  resolveRelative,
+  splitFragment
 } from './epub'
 
 describe('decodeEntities', () => {
@@ -123,6 +125,37 @@ describe('resolveRelative', () => {
 
   it('空基目录时不加斜杠', () => {
     expect(resolveRelative('', 'content.opf')).toBe('content.opf')
+  })
+})
+
+describe('splitFragment', () => {
+  it('拆出路径与锚点', () => {
+    expect(splitFragment('chapter1.xhtml#part1')).toEqual({
+      path: 'chapter1.xhtml',
+      fragment: 'part1'
+    })
+    expect(splitFragment('chapter1.xhtml')).toEqual({ path: 'chapter1.xhtml', fragment: '' })
+  })
+
+  it('对锚点做 URL 解码', () => {
+    expect(splitFragment('a.xhtml#part%201')).toEqual({ path: 'a.xhtml', fragment: 'part 1' })
+  })
+})
+
+describe('resolveAnchorOffset', () => {
+  it('定位到 id 锚点所在字符偏移', () => {
+    const html =
+      '<html><body><p>第一段。</p><h2 id="ch2">第二章 标题</h2><p>第二段。</p></body></html>'
+    expect(resolveAnchorOffset(html, 'ch2')).toBe(5)
+  })
+
+  it('支持 <a name> 锚点', () => {
+    const html = '<html><body><p>甲</p><a name="x"></a><p>乙</p></body></html>'
+    expect(resolveAnchorOffset(html, 'x')).toBe(2)
+  })
+
+  it('找不到返回 null', () => {
+    expect(resolveAnchorOffset('<p>正文</p>', 'nope')).toBeNull()
   })
 })
 
@@ -259,6 +292,39 @@ describe('parseEpub', () => {
   it('无内置目录时回退到正则识别章节', async () => {
     const parsed = await parseEpub(await buildEpub(false))
     expect(parsed.chapters.map((c) => c.title)).toEqual(['第一章 开始', '第二章 内容。'])
+  })
+
+  it('锚点指向同一文件内的精确偏移（单文件 EPUB）', async () => {
+    const zip = new JSZip()
+    zip.file('META-INF/container.xml', containerXml)
+    zip.file(
+      'OEBPS/content.opf',
+      `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>测试</dc:title></metadata>
+  <manifest>
+    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+    <item id="book" href="book.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine toc="ncx">
+    <itemref idref="book"/>
+  </spine>
+</package>`
+    )
+    zip.file(
+      'OEBPS/toc.ncx',
+      `<ncx><navMap>
+  <navPoint id="n1" playOrder="1"><navLabel><text>第一章</text></navLabel><content src="book.xhtml#ch1"/></navPoint>
+  <navPoint id="n2" playOrder="2"><navLabel><text>第二章</text></navLabel><content src="book.xhtml#ch2"/></navPoint>
+</navMap></ncx>`
+    )
+    zip.file(
+      'OEBPS/book.xhtml',
+      '<html><head><title>x</title></head><body><h2 id="ch1">第一章 标题</h2><p>第一段。</p><h2 id="ch2">第二章 标题</h2><p>第二段。</p></body></html>'
+    )
+    const parsed = await parseEpub(await zip.generateAsync({ type: 'nodebuffer' }))
+    expect(parsed.chapters.map((c) => c.title)).toEqual(['第一章', '第二章'])
+    expect(parsed.chapters.map((c) => c.start)).toEqual([0, 12])
   })
 
   it('缺 container.xml 时抛错', async () => {

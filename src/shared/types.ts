@@ -12,6 +12,28 @@ export interface Chapter {
   start: number
 }
 
+export interface Annotation {
+  id: string
+  bookId: string
+  /** 高亮起始字符偏移 */
+  start: number
+  /** 高亮结束字符偏移（不含） */
+  end: number
+  /** 选中的文本内容 */
+  text: string
+  /** 批注内容（空串表示仅高亮、无批注） */
+  note: string
+  createdAt: number
+}
+
+export interface NewAnnotation {
+  bookId: string
+  start: number
+  end: number
+  text: string
+  note?: string
+}
+
 export interface ReadResult {
   id: string
   fileName: string
@@ -27,4 +49,8 @@ export interface ReaderApi {
   removeBook: (id: string) => Promise<Book[]>
   readBook: (id: string) => Promise<ReadResult | null>
   updateProgress: (id: string, progress: number) => Promise<void>
+  listAnnotations: (bookId: string) => Promise<Annotation[]>
+  addAnnotation: (input: NewAnnotation) => Promise<Annotation[]>
+  updateAnnotation: (id: string, note: string) => Promise<Annotation[]>
+  removeAnnotation: (id: string) => Promise<Annotation[]>
 }

@@ -8,6 +8,7 @@
   --bg-hover: #f0f0f0;
   --danger: #d33;
   --danger-border: #f0c0c0;
+  --annotation-bg: #fde68a;
 }
 
 [data-theme='sepia'] {
@@ -20,6 +21,7 @@
   --bg-hover: #eadfc4;
   --danger: #b3543a;
   --danger-border: #d9b8a3;
+  --annotation-bg: #e6c96a;
 }
 
 [data-theme='dark'] {
@@ -32,6 +34,7 @@
   --bg-hover: #33302e;
   --danger: #f87171;
   --danger-border: #7f1d1d;
+  --annotation-bg: #6b5a1a;
 }
 
 * {
@@ -291,3 +294,136 @@ mark.search-hit {
 mark.search-hit.current {
   background: var(--danger);
 }
+
+/* 批注/高亮 */
+mark.annotation {
+  background: var(--annotation-bg);
+  color: var(--fg);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+mark.annotation.has-note {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* 选区浮动工具栏 */
+.selection-toolbar {
+  position: fixed;
+  transform: translate(-50%, -100%);
+  z-index: 30;
+}
+
+.toolbar-actions,
+.note-form-actions {
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+.note-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+.note-form textarea,
+.annotation-edit textarea {
+  width: 240px;
+  min-height: 64px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 14px;
+  resize: vertical;
+}
+
+/* 批注面板 */
+.annotations-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 320px;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
+}
+
+.annotation-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.annotation-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.annotation-main {
+  flex: 1;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.annotation-main:hover .annotation-text {
+  background: var(--annotation-bg);
+}
+
+.annotation-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  border-radius: 2px;
+}
+
+.annotation-note {
+  color: var(--muted);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.annotation-actions,
+.annotation-edit-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.annotation-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+

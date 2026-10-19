@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { findMatches, matchesInLine, splitLine } from './search'
+import { findMatches, matchesInLine } from './search'
 
 describe('findMatches', () => {
   it('大小写不敏感地查找所有匹配', () => {
@@ -55,28 +55,5 @@ describe('matchesInLine', () => {
 
   it('行范围内无匹配时返回空数组', () => {
     expect(matchesInLine(matches, 30, 5)).toEqual([])
-  })
-})
-
-describe('splitLine', () => {
-  it('按匹配把一行切分为片段', () => {
-    expect(splitLine('abcd', 0, [{ start: 2, length: 1 }])).toEqual([
-      { text: 'ab', match: false, start: -1 },
-      { text: 'c', match: true, start: 2 },
-      { text: 'd', match: false, start: -1 }
-    ])
-  })
-
-  it('无匹配时整行作为一个非匹配片段', () => {
-    expect(splitLine('abcd', 0, [{ start: 10, length: 1 }])).toEqual([
-      { text: 'abcd', match: false, start: -1 }
-    ])
-  })
-
-  it('匹配在行首时以匹配片段开头', () => {
-    expect(splitLine('abcd', 0, [{ start: 0, length: 2 }])).toEqual([
-      { text: 'ab', match: true, start: 0 },
-      { text: 'cd', match: false, start: -1 }
-    ])
   })
 })

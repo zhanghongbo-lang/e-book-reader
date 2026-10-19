@@ -6,7 +6,8 @@ import { decodeBuffer, detectEncoding } from './lib/encoding'
 import { normalizeNewlines } from './lib/normalize'
 import { detectChapters } from './lib/chapters'
 import { listBooks, addBook, removeBook, updateProgress, getBook } from './store'
-import type { Book, ReadResult } from '../shared/types'
+import { listAnnotations, addAnnotation, updateAnnotation, removeAnnotation } from './annotations'
+import type { Book, NewAnnotation, ReadResult } from '../shared/types'
 
 export function registerIpcHandlers(): void {
   ipcMain.handle('books:list', () => listBooks())
@@ -64,4 +65,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('books:updateProgress', (_e, id: string, progress: number) => {
     updateProgress(id, progress)
   })
+
+  ipcMain.handle('annotations:list', (_e, bookId: string) => listAnnotations(bookId))
+
+  ipcMain.handle('annotations:add', (_e, input: NewAnnotation) => addAnnotation(input))
+
+  ipcMain.handle('annotations:update', (_e, id: string, note: string) => updateAnnotation(id, note))
+
+  ipcMain.handle('annotations:remove', (_e, id: string) => removeAnnotation(id))
 }

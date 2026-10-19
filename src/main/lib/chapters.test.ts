@@ -43,6 +43,30 @@ describe('detectChapters', () => {
     expect(chapters.map((c) => c.title)).toEqual(['第736章  远方的战将'])
   })
 
+  it('通过序号递增过滤正文里的数字列表', () => {
+    const content = [
+      '55、爆裂末班车',
+      '正文',
+      '160、玫瑰工厂',
+      '===第120章 生肖飞升对赌合同===',
+      '1、第一点',
+      '2、第二点',
+      '3、第三点',
+      '161、下一章'
+    ].join('\n')
+    const chapters = detectChapters(content)
+    expect(chapters.map((c) => c.title)).toEqual([
+      '55、爆裂末班车',
+      '160、玫瑰工厂',
+      '第120章 生肖飞升对赌合同',
+      '161、下一章'
+    ])
+  })
+
+  it('不把裸的「1、」「2、」误判为章节', () => {
+    expect(detectChapters('1、\n2、\n3、\n')).toEqual([])
+  })
+
   it('忽略普通正文行', () => {
     const content = '这是一段很长的普通正文内容，不应该被识别为章节标题。\n第一章 标题\n'
     const chapters = detectChapters(content)

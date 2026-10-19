@@ -8,7 +8,7 @@ const CHAPTER_RE = new RegExp(`^第\\s*[${NUM}]+\\s*[章节卷部集][^\\n]{0,40
 
 // 数字、标题 形式（如「55、爆裂末班车」「160、玫瑰工厂」）
 // 仅用 、（顿号）与 ．（全角句点）作分隔，避免把「3.14」这类小数误判
-const NUMBERED_RE = /^\d{1,4}\s*[、．][^\n]{0,40}$/
+const NUMBERED_RE = /^(\d{1,4})\s*[、．]\s*(.*)$/
 
 // 序章、楔子、番外等特殊标题
 const SPECIAL_RE = /^(序章|序言|楔子|前言|引子|后记|尾声|番外|外传|附录)[^\n]{0,40}$/
@@ -28,17 +28,32 @@ export function detectChapters(content: string): Chapter[] {
   const chapters: Chapter[] = []
   const lines = content.split('\n')
   let offset = 0
+  let lastNumberedChapter = -1
+
   for (const line of lines) {
     const stripped = stripDecorations(line.trim())
-    if (stripped.length > 0 && stripped.length <= 40) {
-      const isHeading =
-        CHAPTER_RE.test(stripped) ||
-        NUMBERED_RE.test(stripped) ||
-        SPECIAL_RE.test(stripped) ||
-        ENGLISH_RE.test(stripped)
-      if (isHeading) {
-        chapters.push({ title: stripped, start: offset })
+    let matched = false
+
+    if (stripped.length > 0) {
+      // 「数字、标题」：标题需 ≥2 字，且序号严格递增（过滤正文里的 1、2、3、 列表）
+      const numbered = NUMBERED_RE.exec(stripped)
+      if (numbered) {
+        const num = parseInt(numbered[1], 10)
+        const title = numbered[2].trim()
+        if (title.length >= 2 && title.length <= 40 && num > lastNumberedChapter) {
+          lastNumberedChapter = num
+          matched = true
+        }
       }
+
+      if (!matched) {
+        matched =
+          CHAPTER_RE.test(stripped) || SPECIAL_RE.test(stripped) || ENGLISH_RE.test(stripped)
+      }
+    }
+
+    if (matched) {
+      chapters.push({ title: stripped, start: offset })
     }
     offset += line.length + 1
   }

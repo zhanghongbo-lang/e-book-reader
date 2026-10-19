@@ -25,6 +25,24 @@ describe('detectChapters', () => {
     expect(chapters.map((c) => c.title)).toEqual(['Chapter 1 Start', 'CHAPTER 2 Next'])
   })
 
+  it('识别「数字、标题」形式的章节', () => {
+    const content = '55、爆裂末班车（双更）\n正文\n160、玫瑰工厂\n'
+    const chapters = detectChapters(content)
+    expect(chapters.map((c) => c.title)).toEqual(['55、爆裂末班车（双更）', '160、玫瑰工厂'])
+  })
+
+  it('识别带 === 装饰符的章节并去掉装饰', () => {
+    const content = '===第113章 勇敢的姑娘===\n正文\n===第114章===\n'
+    const chapters = detectChapters(content)
+    expect(chapters.map((c) => c.title)).toEqual(['第113章 勇敢的姑娘', '第114章'])
+  })
+
+  it('识别序号与标题间有多余空格的「第X章」', () => {
+    const content = '第736章  远方的战将\n'
+    const chapters = detectChapters(content)
+    expect(chapters.map((c) => c.title)).toEqual(['第736章  远方的战将'])
+  })
+
   it('忽略普通正文行', () => {
     const content = '这是一段很长的普通正文内容，不应该被识别为章节标题。\n第一章 标题\n'
     const chapters = detectChapters(content)

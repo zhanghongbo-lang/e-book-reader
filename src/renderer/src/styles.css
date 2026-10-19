@@ -23,15 +23,15 @@
 }
 
 [data-theme='dark'] {
-  --bg: #171717;
-  --surface: #262626;
-  --fg: #e4e4e4;
-  --muted: #9a9a9a;
-  --border: #3d3d3d;
-  --accent: #6aa9ff;
-  --bg-hover: #303030;
-  --danger: #ff7b7b;
-  --danger-border: #5c3a3a;
+  --bg: #1c1917;
+  --surface: #292524;
+  --fg: #e7e5e4;
+  --muted: #a8a29e;
+  --border: #44403c;
+  --accent: #fbbf24;
+  --bg-hover: #33302e;
+  --danger: #f87171;
+  --danger-border: #7f1d1d;
 }
 
 * {

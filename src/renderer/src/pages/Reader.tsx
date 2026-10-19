@@ -24,9 +24,19 @@ interface Para {
   start: number
 }
 
+function findParaIndex(paras: Para[], offset: number): number {
+  let idx = 0
+  for (let i = 0; i < paras.length; i++) {
+    if (paras[i].start <= offset) idx = i
+    else break
+  }
+  return idx
+}
+
 export default function Reader({ bookId, onBack, settings, onUpdateSettings, onCycleTheme }: Props) {
   const [data, setData] = useState<ReadResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showToc, setShowToc] = useState(false)
 
   const parentRef = useRef<HTMLDivElement>(null)
   const restoredRef = useRef(false)
@@ -52,6 +62,8 @@ export default function Reader({ bookId, onBack, settings, onUpdateSettings, onC
     overscan: 20
   })
 
+  const chapters = data?.chapters ?? []
+
   // 加载书籍内容
   useEffect(() => {
     let cancelled = false
@@ -75,12 +87,7 @@ export default function Reader({ bookId, onBack, settings, onUpdateSettings, onC
     restoredRef.current = true
     const target = data.progress
     if (target <= 0) return
-    let idx = 0
-    for (let i = 0; i < paras.length; i++) {
-      if (paras[i].start <= target) idx = i
-      else break
-    }
-    virtualizer.scrollToIndex(idx, { align: 'start' })
+    virtualizer.scrollToIndex(findParaIndex(paras, target), { align: 'start' })
   }, [data, paras, virtualizer])
 
   const saveProgress = useCallback(
@@ -121,6 +128,14 @@ export default function Reader({ bookId, onBack, settings, onUpdateSettings, onC
     [settings.lineHeight, onUpdateSettings]
   )
 
+  const jumpToChapter = useCallback(
+    (start: number) => {
+      virtualizer.scrollToIndex(findParaIndex(paras, start), { align: 'start' })
+      setShowToc(false)
+    },
+    [paras, virtualizer]
+  )
+
   if (error) {
     return (
       <div className="reader">
@@ -136,6 +151,7 @@ export default function Reader({ bookId, onBack, settings, onUpdateSettings, onC
     <div className="reader">
       <div className="reader-topbar">
         <button onClick={handleBack}>返回</button>
+        {chapters.length > 0 && <button onClick={() => setShowToc((v) => !v)}>目录</button>}
         <span className="reader-title">{data?.fileName ?? ''}</span>
         <button onClick={onCycleTheme}>主题：{THEME_LABELS[settings.theme]}</button>
         <div className="reader-controls">
@@ -145,6 +161,24 @@ export default function Reader({ bookId, onBack, settings, onUpdateSettings, onC
           <button onClick={() => changeLineHeight(0.2)}>行距+</button>
         </div>
       </div>
+
+      {showToc && chapters.length > 0 && (
+        <div className="toc-panel">
+          <div className="toc-header">
+            <span>目录</span>
+            <button onClick={() => setShowToc(false)}>关闭</button>
+          </div>
+          <ul className="toc-list">
+            {chapters.map((c, i) => (
+              <li key={i}>
+                <button className="toc-item" onClick={() => jumpToChapter(c.start)}>
+                  {c.title}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="reader-scroll" ref={parentRef} onScroll={handleScroll}>
         <div

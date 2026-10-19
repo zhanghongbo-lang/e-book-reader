@@ -4,6 +4,7 @@ import { basename } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { decodeBuffer, detectEncoding } from './lib/encoding'
 import { normalizeNewlines } from './lib/normalize'
+import { detectChapters } from './lib/chapters'
 import { listBooks, addBook, removeBook, updateProgress, getBook } from './store'
 import type { Book, ReadResult } from '../shared/types'
 
@@ -50,11 +51,13 @@ export function registerIpcHandlers(): void {
     if (!book) return null
     const buf = await readFile(book.filePath)
     const { text } = decodeBuffer(buf)
+    const content = normalizeNewlines(text)
     return {
       id: book.id,
       fileName: book.fileName,
-      content: normalizeNewlines(text),
-      progress: book.progress
+      content,
+      progress: book.progress,
+      chapters: detectChapters(content)
     }
   })
 

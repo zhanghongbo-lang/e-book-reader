@@ -7,11 +7,17 @@ export interface Book {
   addedAt: number
 }
 
+export interface Chapter {
+  title: string
+  start: number
+}
+
 export interface ReadResult {
   id: string
   fileName: string
   content: string
   progress: number
+  chapters: Chapter[]
 }
 
 /** preload 通过 contextBridge 暴露给渲染进程的 API */

@@ -1,8 +1,14 @@
+export type BookFormat = 'txt' | 'epub'
+
 export interface Book {
   id: string
   fileName: string
   filePath: string
   encoding: string
+  /** 书籍格式，老数据可能缺省，读取时按扩展名兜底 */
+  format?: BookFormat
+  /** EPUB 元数据标题（TXT 无） */
+  title?: string
   progress: number
   addedAt: number
 }

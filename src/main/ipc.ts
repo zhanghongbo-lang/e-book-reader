@@ -5,9 +5,14 @@ import { randomUUID } from 'node:crypto'
 import { decodeBuffer, detectEncoding } from './lib/encoding'
 import { normalizeNewlines } from './lib/normalize'
 import { detectChapters } from './lib/chapters'
+import { parseEpub } from './lib/epub'
 import { listBooks, addBook, removeBook, updateProgress, getBook } from './store'
 import { listAnnotations, addAnnotation, updateAnnotation, removeAnnotation } from './annotations'
-import type { Book, NewAnnotation, ReadResult } from '../shared/types'
+import type { Book, BookFormat, NewAnnotation, ReadResult } from '../shared/types'
+
+function detectFormat(filePath: string): BookFormat {
+  return filePath.toLowerCase().endsWith('.epub') ? 'epub' : 'txt'
+}
 
 export function registerIpcHandlers(): void {
   ipcMain.handle('books:list', () => listBooks())
@@ -15,8 +20,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('books:import', async () => {
     const win = BrowserWindow.getFocusedWindow()
     const options: OpenDialogOptions = {
-      title: '导入 TXT 文件',
-      filters: [{ name: 'TXT 文本文件', extensions: ['txt'] }],
+      title: '导入电子书',
+      filters: [
+        { name: '电子书文件', extensions: ['txt', 'epub'] },
+        { name: 'TXT 文本文件', extensions: ['txt'] },
+        { name: 'EPUB 电子书', extensions: ['epub'] }
+      ],
       properties: ['openFile', 'multiSelections']
     }
     const result = win
@@ -27,15 +36,27 @@ export function registerIpcHandlers(): void {
     }
 
     for (const filePath of result.filePaths) {
-      const buf = await readFile(filePath)
-      const encoding = detectEncoding(buf)
+      const format = detectFormat(filePath)
       const book: Book = {
         id: randomUUID(),
         fileName: basename(filePath),
         filePath,
-        encoding,
+        encoding: 'utf-8',
+        format,
         progress: 0,
         addedAt: Date.now()
+      }
+
+      if (format === 'txt') {
+        const buf = await readFile(filePath)
+        book.encoding = detectEncoding(buf)
+      } else {
+        try {
+          const parsed = await parseEpub(await readFile(filePath))
+          book.title = parsed.title ?? undefined
+        } catch {
+          // 解析失败仍入库，读取时再报错并展示
+        }
       }
       addBook(book)
     }
@@ -50,15 +71,29 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('books:read', async (_e, id: string): Promise<ReadResult | null> => {
     const book = getBook(id)
     if (!book) return null
-    const buf = await readFile(book.filePath)
-    const { text } = decodeBuffer(buf)
-    const content = normalizeNewlines(text)
-    return {
-      id: book.id,
-      fileName: book.fileName,
-      content,
-      progress: book.progress,
-      chapters: detectChapters(content)
+    try {
+      const format = book.format ?? detectFormat(book.filePath)
+      let content: string
+      let chapters
+      if (format === 'epub') {
+        const parsed = await parseEpub(await readFile(book.filePath))
+        content = parsed.content
+        chapters = parsed.chapters
+      } else {
+        const buf = await readFile(book.filePath)
+        const { text } = decodeBuffer(buf)
+        content = normalizeNewlines(text)
+        chapters = detectChapters(content)
+      }
+      return {
+        id: book.id,
+        fileName: book.fileName,
+        content,
+        progress: book.progress,
+        chapters
+      }
+    } catch {
+      return null
     }
   })
 

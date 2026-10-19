@@ -40,19 +40,19 @@ export default function Shelf({ onOpen, theme, onCycleTheme }: Props) {
         <div className="shelf-actions">
           <button onClick={onCycleTheme}>主题：{THEME_LABELS[theme]}</button>
           <button onClick={handleImport} disabled={busy}>
-            {busy ? '导入中…' : '导入 TXT'}
+            {busy ? '导入中…' : '导入'}
           </button>
         </div>
       </header>
 
       {books.length === 0 ? (
-        <div className="empty">还没有书，点击右上角「导入 TXT」添加</div>
+        <div className="empty">还没有书，点击右上角「导入」添加 TXT 或 EPUB 文件</div>
       ) : (
         <ul className="book-list">
           {books.map((b) => (
             <li key={b.id} className="book-item">
               <button className="book-main" onClick={() => onOpen(b.id)}>
-                <span className="book-name">{b.fileName}</span>
+                <span className="book-name">{b.title || b.fileName}</span>
                 <span className={`book-badge ${b.progress > 0 ? 'read' : ''}`}>
                   {b.progress > 0 ? '已读' : '未读'}
                 </span>

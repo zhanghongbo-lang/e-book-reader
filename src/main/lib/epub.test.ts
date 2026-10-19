@@ -327,6 +327,33 @@ describe('parseEpub', () => {
     expect(parsed.chapters.map((c) => c.start)).toEqual([0, 12])
   })
 
+  it('正文文本含 CRLF 时目录偏移仍与内容一致（多文件 EPUB）', async () => {
+    // 前一个文件的正文字里混入 \r\n（如硬换行的段落），若未归一化，
+    // fileStart 会按 2 字符计算 \r\n，而 content 归一化为 1 字符，导致后续章节整体偏移
+    const ch1 = '<html><head><title>一</title></head><body><h1>第一章 开始</h1><p>第一段\r\n换行内容。</p></body></html>'
+    const ch2 = '<html><head><title>二</title></head><body><h1>第二章 开始</h1><p>第二段正文。</p></body></html>'
+
+    const zip = new JSZip()
+    zip.file('META-INF/container.xml', containerXml)
+    zip.file('OEBPS/content.opf', buildOpf('ncx'))
+    zip.file(
+      'OEBPS/toc.ncx',
+      `<ncx><navMap>
+  <navPoint id="n1"><navLabel><text>第一章</text></navLabel><content src="chapter1.xhtml"/></navPoint>
+  <navPoint id="n2"><navLabel><text>第二章</text></navLabel><content src="chapter2.xhtml"/></navPoint>
+</navMap></ncx>`
+    )
+    zip.file('OEBPS/chapter1.xhtml', ch1)
+    zip.file('OEBPS/chapter2.xhtml', ch2)
+
+    const parsed = await parseEpub(await zip.generateAsync({ type: 'nodebuffer' }))
+    // 章节偏移应精确指向内容中对应标题的位置
+    expect(parsed.chapters[0].start).toBe(parsed.content.indexOf('第一章 开始'))
+    expect(parsed.chapters[1].start).toBe(parsed.content.indexOf('第二章 开始'))
+    // 内容中的 \r\n 已归一化为 \n
+    expect(parsed.content).not.toContain('\r')
+  })
+
   it('缺 container.xml 时抛错', async () => {
     const zip = new JSZip()
     zip.file('foo.txt', 'x')

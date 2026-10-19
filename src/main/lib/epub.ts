@@ -65,7 +65,9 @@ function blockifyAndStrip(cleaned: string): string {
   const withNewlines = cleaned
     .replace(/<(br|hr)\b[^>]*\/?>/gi, '\n')
     .replace(/<\/(p|div|h[1-6]|li|blockquote|section|article|tr|table|figcaption)\b[^>]*>/gi, '\n')
-  return decodeEntities(withNewlines.replace(/<[^>]+>/g, ''))
+  const noTags = withNewlines.replace(/<[^>]+>/g, '')
+  // 关键：把 \r\n / \r 统一成 \n，否则正文里的换行与偏移计算不一致
+  return decodeEntities(noTags).replace(/\r\n?/g, '\n')
 }
 
 /** 折叠行尾空白与连续空行（与 htmlToText 一致，但不 trim） */

@@ -31,6 +31,12 @@ describe('detectChapters', () => {
     expect(chapters.map((c) => c.title)).toEqual(['第一章 标题'])
   })
 
+  it('不把「第X回合」误判为章节', () => {
+    const content = '第一回合，双方势均力敌。\n第二回合 更是激烈\n第一章 正文\n'
+    const chapters = detectChapters(content)
+    expect(chapters.map((c) => c.title)).toEqual(['第一章 正文'])
+  })
+
   it('正确记录章节起始字符偏移', () => {
     const content = '第一章\nabc\n第二章\n'
     const chapters = detectChapters(content)

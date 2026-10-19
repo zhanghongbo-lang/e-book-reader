@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Book } from '../../../shared/types'
+import { THEME_LABELS, type ThemeId } from '../settings'
 
 interface Props {
   onOpen: (id: string) => void
+  theme: ThemeId
+  onCycleTheme: () => void
 }
 
-export default function Shelf({ onOpen }: Props) {
+export default function Shelf({ onOpen, theme, onCycleTheme }: Props) {
   const [books, setBooks] = useState<Book[]>([])
   const [busy, setBusy] = useState(false)
 
@@ -34,9 +37,12 @@ export default function Shelf({ onOpen }: Props) {
     <div className="shelf">
       <header className="shelf-header">
         <h1>书架</h1>
-        <button onClick={handleImport} disabled={busy}>
-          {busy ? '导入中…' : '导入 TXT'}
-        </button>
+        <div className="shelf-actions">
+          <button onClick={onCycleTheme}>主题：{THEME_LABELS[theme]}</button>
+          <button onClick={handleImport} disabled={busy}>
+            {busy ? '导入中…' : '导入 TXT'}
+          </button>
+        </div>
       </header>
 
       {books.length === 0 ? (

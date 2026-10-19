@@ -1,10 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { ReadResult } from '../../../shared/types'
+import {
+  clamp,
+  FONT_SIZE_MAX,
+  FONT_SIZE_MIN,
+  LINE_HEIGHT_MAX,
+  LINE_HEIGHT_MIN,
+  THEME_LABELS,
+  type ReaderSettings
+} from '../settings'
 
 interface Props {
   bookId: string
   onBack: () => void
+  settings: ReaderSettings
+  onUpdateSettings: (patch: Partial<ReaderSettings>) => void
+  onCycleTheme: () => void
 }
 
 interface Para {
@@ -12,11 +24,9 @@ interface Para {
   start: number
 }
 
-export default function Reader({ bookId, onBack }: Props) {
+export default function Reader({ bookId, onBack, settings, onUpdateSettings, onCycleTheme }: Props) {
   const [data, setData] = useState<ReadResult | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [fontSize, setFontSize] = useState(18)
-  const [lineHeight, setLineHeight] = useState(1.8)
 
   const parentRef = useRef<HTMLDivElement>(null)
   const restoredRef = useRef(false)
@@ -96,6 +106,21 @@ export default function Reader({ bookId, onBack }: Props) {
     onBack()
   }, [saveProgress, onBack])
 
+  const changeFontSize = useCallback(
+    (delta: number) => {
+      onUpdateSettings({ fontSize: clamp(settings.fontSize + delta, FONT_SIZE_MIN, FONT_SIZE_MAX) })
+    },
+    [settings.fontSize, onUpdateSettings]
+  )
+
+  const changeLineHeight = useCallback(
+    (delta: number) => {
+      const next = Math.round((settings.lineHeight + delta) * 10) / 10
+      onUpdateSettings({ lineHeight: clamp(next, LINE_HEIGHT_MIN, LINE_HEIGHT_MAX) })
+    },
+    [settings.lineHeight, onUpdateSettings]
+  )
+
   if (error) {
     return (
       <div className="reader">
@@ -112,11 +137,12 @@ export default function Reader({ bookId, onBack }: Props) {
       <div className="reader-topbar">
         <button onClick={handleBack}>返回</button>
         <span className="reader-title">{data?.fileName ?? ''}</span>
+        <button onClick={onCycleTheme}>主题：{THEME_LABELS[settings.theme]}</button>
         <div className="reader-controls">
-          <button onClick={() => setFontSize((n) => Math.max(12, n - 1))}>字号-</button>
-          <button onClick={() => setFontSize((n) => Math.min(32, n + 1))}>字号+</button>
-          <button onClick={() => setLineHeight((n) => Math.max(1.2, n - 0.2))}>行距-</button>
-          <button onClick={() => setLineHeight((n) => Math.min(3, n + 0.2))}>行距+</button>
+          <button onClick={() => changeFontSize(-1)}>字号-</button>
+          <button onClick={() => changeFontSize(1)}>字号+</button>
+          <button onClick={() => changeLineHeight(-0.2)}>行距-</button>
+          <button onClick={() => changeLineHeight(0.2)}>行距+</button>
         </div>
       </div>
 
@@ -137,8 +163,8 @@ export default function Reader({ bookId, onBack }: Props) {
                 left: 0,
                 width: '100%',
                 transform: `translateY(${vi.start}px)`,
-                fontSize: `${fontSize}px`,
-                lineHeight
+                fontSize: `${settings.fontSize}px`,
+                lineHeight: settings.lineHeight
               }}
             >
               {paras[vi.index].text || '\u00A0'}

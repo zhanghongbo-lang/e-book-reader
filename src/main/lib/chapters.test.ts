@@ -67,6 +67,53 @@ describe('detectChapters', () => {
     expect(detectChapters('1、\n2、\n3、\n')).toEqual([])
   })
 
+  it('番外后序号重新编号也能识别', () => {
+    const content = [
+      '160、玫瑰工厂',
+      '正文',
+      '番外一',
+      '正文',
+      '1、番外第一个小故事',
+      '2、番外第二个小故事',
+      '正文'
+    ].join('\n')
+    const chapters = detectChapters(content)
+    expect(chapters.map((c) => c.title)).toEqual([
+      '160、玫瑰工厂',
+      '番外一',
+      '1、番外第一个小故事',
+      '2、番外第二个小故事'
+    ])
+  })
+
+  it('识别短标题加尾部序号的章节（如监视环2、逛超市3）', () => {
+    const content = '监视环2\n正文\n逛超市3\n正文\n'
+    const chapters = detectChapters(content)
+    expect(chapters.map((c) => c.title)).toEqual(['监视环2', '逛超市3'])
+  })
+
+  it('识别短标题加分卷括号的章节（如入职（上））', () => {
+    const content = '入职（上）\n正文\n入职（下）\n入职（一）\n入职（1）\n'
+    const chapters = detectChapters(content)
+    expect(chapters.map((c) => c.title)).toEqual([
+      '入职（上）',
+      '入职（下）',
+      '入职（一）',
+      '入职（1）'
+    ])
+  })
+
+  it('识别番外后直接跟数字的章节（番外1）', () => {
+    const content = '番外1\n正文\n番外2\n'
+    const chapters = detectChapters(content)
+    expect(chapters.map((c) => c.title)).toEqual(['番外1', '番外2'])
+  })
+
+  it('不把含标点的普通正文误判为章节', () => {
+    const content = '这是一段普通正文，结尾没有序号。\n他今年三十岁了。\n'
+    expect(detectChapters(content)).toEqual([])
+  })
+
   it('忽略普通正文行', () => {
     const content = '这是一段很长的普通正文内容，不应该被识别为章节标题。\n第一章 标题\n'
     const chapters = detectChapters(content)
